@@ -83,11 +83,11 @@ The main results reported in our paper are presented as follows.
 
 ------
 
-<img src="C:\Users\11\AppData\Roaming\Typora\typora-user-images\image-20251124112727059.png" alt="image-20251124112727059" style="zoom:80%;" />
+<img src="./src/image1.png" alt="image-20251124112727059" style="zoom:80%;" />
 
 ------
 
-![image-20251124112803994](C:\Users\11\AppData\Roaming\Typora\typora-user-images\image-20251124112803994.png)
+<img src="./src/image2.png" alt="image-20251124112727059" style="zoom:80%;" />
 
 ------
 
