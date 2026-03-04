@@ -97,3 +97,5 @@ The main results reported in our paper are presented as follows.
 
 
 This code is based on the [TransUNet](https://github.com/Beckschen/TransUNet) repository. We thank the authors for their valuable work.
+
+Feel free to contact whh24@mails.tsinghua.edu.cn if you have any problem.
