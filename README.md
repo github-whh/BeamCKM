@@ -16,7 +16,7 @@ pip install -r ./requirement/requirements.txt
 
 ### A. Data Preparation
 
-The multi-beam channel knowledge map dataset is generated from [Sionna Toolbox](https://nvlabs.github.io/sionna/). The environmental contour is obtained from the [openstreetmap](https://www.openstreetmap.org/) website. This paper provides a trainable dataset in [Google Drive](https://drive.google.com/drive/folders/1rXx10-FE3ALH-57TAh9_2ltZEt0JnjDk), which is easier to use for multi-antenna channel knowledge map construction.
+The multi-beam channel knowledge map dataset is generated from [Sionna Toolbox](https://nvlabs.github.io/sionna/). The environmental contour is obtained from the [openstreetmap](https://www.openstreetmap.org/) website. This paper provides a trainable dataset in [Google Drive](https://drive.google.com/drive/folders/1rXx10-FE3ALH-57TAh9_2ltZEt0JnjDk?usp=drive_link), which is easier to use for multi-antenna channel knowledge map construction.
 
 You can generate your own dataset according to the [open source library of Sionna](https://nvlabs.github.io/sionna/) as well. The details of data pre-processing can be found in the website.
 
@@ -94,5 +94,6 @@ The main results reported in our paper are presented as follows.
 
 
 # Acknowledgement
+
 
 This code is based on the [TransUNet](https://github.com/Beckschen/TransUNet) repository. We thank the authors for their valuable work.
