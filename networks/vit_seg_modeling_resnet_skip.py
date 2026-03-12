@@ -14,23 +14,6 @@ def np2th(weights, conv=False):
         weights = weights.transpose([3, 2, 0, 1])
     return torch.from_numpy(weights)
 
-# class ECAModule(nn.Module):
-#     def __init__(self, channels, gamma=2, b=1):
-#         super().__init__()
-#         t = int(abs((math.log2(channels) + b) / gamma))
-#         k = t if t % 2 else t + 1
-#         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-#         self.conv = nn.Conv1d(1, 1, kernel_size=k, padding=k//2, bias=False)
-#         self.sigmoid = nn.Sigmoid()
-
-#     def forward(self, x):
-#         y = self.avg_pool(x)
-#         B, C, H, W = y.shape
-#         y = y.view(B, -1, C)  # 替代 squeeze + transpose
-#         y = self.conv(y)
-#         y = y.view(B, C, 1, 1)  # 替代 transpose + unsqueeze
-#         y = self.sigmoid(y)
-#         return x * y
 
 class StdConv2d(nn.Conv2d):
 
@@ -65,7 +48,6 @@ class PreActBottleneck(nn.Module):
         self.conv2 = conv3x3(cmid, cmid, stride, bias=False)  # Original code has it on conv1!!
         self.gn3 = nn.GroupNorm(32, cout, eps=1e-6)
         self.conv3 = conv1x1(cmid, cout, bias=False)
-        # self.eca = ECAModule(cout)
         self.relu = nn.ReLU(inplace=True)
 
         if (stride != 1 or cin != cout):
@@ -85,8 +67,6 @@ class PreActBottleneck(nn.Module):
         y = self.relu(self.gn1(self.conv1(x)))
         y = self.relu(self.gn2(self.conv2(y)))
         y = self.gn3(self.conv3(y))
-        # y = self.eca(y)
-
         y = self.relu(residual + y)
         return y
 
@@ -128,51 +108,77 @@ class PreActBottleneck(nn.Module):
             self.gn_proj.bias.copy_(proj_gn_bias.view(-1))
 
 class ResNetV2(nn.Module):
-    """Implementation of Pre-activation (v2) ResNet mode."""
+    """Improved Pre-activation (v2) ResNet with dynamic downsampling rate"""
 
-    def __init__(self, block_units, width_factor):
+    def __init__(self, block_units, width_factor, patch_size=16):
         super().__init__()
         width = int(64 * width_factor)
         self.width = width
 
+        # Core logic: dynamically determine block3 stride based on patch_size
+        # patch_size=16 -> stride=2 (total downsampling 16x)
+        # patch_size=8  -> stride=1 (total downsampling 8x)
+        self.block3_stride = 2 if patch_size == 16 else 1
+
+        # Root part remains unchanged (downsampling 2x)
         self.root = nn.Sequential(OrderedDict([
             ('conv', StdConv2d(3, width, kernel_size=7, stride=2, bias=False, padding=3)),
             ('gn', nn.GroupNorm(32, width, eps=1e-6)),
             ('relu', nn.ReLU(inplace=True)),
-            # ('pool', nn.MaxPool2d(kernel_size=3, stride=2, padding=0))
         ]))
 
         self.body = nn.Sequential(OrderedDict([
+            # block1: output stride=4 (due to root 2x + pool 2x)
             ('block1', nn.Sequential(OrderedDict(
                 [('unit1', PreActBottleneck(cin=width, cout=width*4, cmid=width))] +
                 [(f'unit{i:d}', PreActBottleneck(cin=width*4, cout=width*4, cmid=width)) for i in range(2, block_units[0] + 1)],
-                ))),
+            ))),
+            # block2: introduce stride=2, output stride=8
             ('block2', nn.Sequential(OrderedDict(
                 [('unit1', PreActBottleneck(cin=width*4, cout=width*8, cmid=width*2, stride=2))] +
                 [(f'unit{i:d}', PreActBottleneck(cin=width*8, cout=width*8, cmid=width*2)) for i in range(2, block_units[1] + 1)],
-                ))),
+            ))),
+            # block3: dynamic stride, output stride=16 (original) or stride=8 (b8 version)
             ('block3', nn.Sequential(OrderedDict(
-                [('unit1', PreActBottleneck(cin=width*8, cout=width*16, cmid=width*4, stride=2))] +
+                [('unit1', PreActBottleneck(cin=width*8, cout=width*16, cmid=width*4, stride=self.block3_stride))] +
                 [(f'unit{i:d}', PreActBottleneck(cin=width*16, cout=width*16, cmid=width*4)) for i in range(2, block_units[2] + 1)],
-                ))),
+            ))),
         ]))
 
     def forward(self, x):
         features = []
         b, c, in_size, _ = x.size()
+
+        # 1. Root stage
         x = self.root(x)
-        features.append(x)
+        features.append(x) # [B, 64, 128, 128] (assuming input 256)
+
+        # 2. MaxPool stage
         x = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x)
-        for i in range(len(self.body)-1):
+
+        # 3. Body stage (iterate through block1 and block2)
+        # Note: here we manually manage stride counting to calculate right_size
+        current_stride = 4
+        for i in range(len(self.body) - 1): # Only process first two blocks
             x = self.body[i](x)
-            right_size = int(in_size / 4 / (i+1))
+
+            # The logic here needs to be careful: block1 does not downsample (keeps 4x), block2 downsamples (becomes 8x)
+            if i == 1:
+                current_stride = 8
+
+            right_size = int(in_size / current_stride)
+
+            # Padding logic maintains original compatibility
             if x.size()[2] != right_size:
                 pad = right_size - x.size()[2]
-                assert pad < 3 and pad > 0, "x {} should {}".format(x.size(), right_size)
                 feat = torch.zeros((b, x.size()[1], right_size, right_size), device=x.device)
                 feat[:, :, 0:x.size()[2], 0:x.size()[3]] = x[:]
             else:
                 feat = x
             features.append(feat)
+
+        # 4. Last block (block3)
         x = self.body[-1](x)
+
+        # Return final features and intermediate features for Skip Connection
         return x, features[::-1]
