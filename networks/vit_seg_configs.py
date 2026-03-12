@@ -1,5 +1,47 @@
 import ml_collections
 
+
+def get_b8_config():
+    """Returns the ViT-B/16 configuration."""
+    config = ml_collections.ConfigDict()
+    config.patches = ml_collections.ConfigDict({'size': (8, 8)})
+    config.hidden_size = 768
+    config.transformer = ml_collections.ConfigDict()
+    config.transformer.mlp_dim = 3072
+    config.transformer.num_heads = 12
+    config.transformer.num_layers = 12
+    config.transformer.attention_dropout_rate = 0.0
+    config.transformer.dropout_rate = 0.1
+
+    config.classifier = 'seg'
+    config.representation_size = None
+    config.resnet_pretrained_path = None
+    config.patch_size = 8
+
+    config.decoder_channels = (128, 64, 16)
+    config.n_classes = 2
+    config.activation = 'softmax'
+    return config
+
+def get_r50_b8_config():
+    """Returns the Resnet50 + ViT-B/8 configuration."""
+    config = get_b8_config()
+    config.patches.grid = (32, 32) 
+    
+    config.resnet = ml_collections.ConfigDict()
+    config.resnet.num_layers = (3, 4, 9)
+    config.resnet.width_factor = 1
+
+    config.classifier = 'seg'
+
+    config.decoder_channels = (128, 64, 16)
+    config.skip_channels = [256, 64, 0]
+    config.n_classes = 2
+    config.n_skip = 2
+    config.activation = 'softmax'
+
+    return config
+
 def get_b16_config():
     """Returns the ViT-B/16 configuration."""
     config = ml_collections.ConfigDict()
